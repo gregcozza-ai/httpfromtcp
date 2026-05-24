@@ -2,63 +2,38 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"log"
+	//"io"
 	"net"
-	
-	"strings"
+
+	"github.com/gregcozza-ai/httpfromtcp/internal/request"
 )
 
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-	go func () {
-		defer f.Close()
-		buffer := make([]byte, 8)
-		currentLine := ""
-
-		for {
-			n, err := f.Read(buffer)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				panic(err)
-			}
-
-			currentLine += string(buffer[:n])
-			parts := strings.Split(currentLine, "\n")
-
-			for i := 0; i < len(parts)-1; i++ {
-				ch <- parts[i]
-			}
-
-			currentLine = parts[len(parts)-1]
-		}
-
-		if currentLine != "" {
-			ch <- currentLine 
-		}
-		close(ch)
-	}()
-	return ch 
-}
+const port = ":42069"
 
 func main() {
-	listener, err := net.Listen("tcp", ":42069")
+	listener, err := net.Listen("tcp", port)
 	if err != nil {
-		panic(err)
+		log.Fatalf("error listening for TCP traffic: %s\n", err.Error())
 	}
 	defer listener.Close()
 
+	fmt.Println("Listening for TCP traffic on", port)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			panic(err)
+			log.Fatalf("error: %s\n", err.Error())
 		}
-		fmt.Println("Connection accepted")
-		lines := getLinesChannel(conn)
-		for line := range lines {
-			fmt.Println(line)
+		fmt.Println("Connection accepted from", conn.RemoteAddr())
+		
+		req, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("error parsing request %s\n", err.Error())
 		}
-		fmt.Println("Connection closed")
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %s\n", req.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", req.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", req.RequestLine.HttpVersion)
+		
 	}
 }

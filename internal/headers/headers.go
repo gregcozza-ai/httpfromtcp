@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"slices"
 	
 )
 
@@ -67,12 +68,19 @@ var tokenChars = []byte{'!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', 
 // or characters that are allowed in a token
 func validTokens(data []byte) bool {
 	for _, c := range data {
-		if !(c >= 'A' && c <= 'Z' ||
-			c >= 'a' && c <= 'z' ||
-			c >= '0' && c <= '9' ||
-			c == '-') {
+		if !isTokenChar(c) {
 			return false
 		}
 	}
 	return true
+}
+
+func isTokenChar(c byte) bool {
+	if c >= 'A' && c <= 'Z' ||
+		c >= 'a' && c <= 'z' ||
+		c >= '0' && c <= '9' {
+		return true
+	}
+
+	return slices.Contains(tokenChars, c)
 }

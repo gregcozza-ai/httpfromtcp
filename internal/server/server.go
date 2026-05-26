@@ -5,8 +5,11 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
-)
 
+	"github.com/gregcozza-ai/httpfromtcp/internal/response"
+	
+)
+// Server is an HTTP 1.1 server 
 type Server struct {
 	listener 	net.Listener
 	closed		atomic.Bool 
@@ -47,13 +50,17 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	response := "HTTP/1.1 200 OK\r\n" +
-		"Content-Type: text/plain\r\n" +
-		"Content-Length: 13\r\n" +
-		"\r\n" +
-		"Hello World!\n"
-	_, err := conn.Write([]byte(response))
-	if err != nil {
-		log.Printf("error writing response: %v", err)
+
+	// Write status line
+	response.WriteStatusLine(conn, response.StatusCodeSuccess)
+	
+	// Get default headers with correct content length
+	headers := response.GetDefaultHeaders(0)
+
+	// Write headers
+	if err := response.WriteHeaders(conn, headers); err != nil {
+		log.Printf("error writing headers: %v", err)
+		return
 	}
+
 }

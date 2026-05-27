@@ -10,7 +10,7 @@ type StatusCode int
 
 const (
 	StatusCodeSuccess 			StatusCode = 200
-	StatusBadRequest			StatusCode = 400
+	StatusCodeBadRequest			StatusCode = 400
 	StatusInternalServerError	StatusCode = 500
 )
 
@@ -19,7 +19,7 @@ func getStatusLine(statusCode StatusCode) []byte {
 	switch statusCode {
 	case StatusCodeSuccess:
 		reasonPhrase = "OK"
-	case StatusBadRequest:
+	case StatusCodeBadRequest:
 		reasonPhrase = "Bad Request"
 	case StatusInternalServerError:
 		reasonPhrase = "Internal Server Error"

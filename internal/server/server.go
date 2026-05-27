@@ -5,22 +5,47 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+	"bytes"
+	"io"
 
 	"github.com/gregcozza-ai/httpfromtcp/internal/response"
+	"github.com/gregcozza-ai/httpfromtcp/internal/request"
+
 	
 )
-// Server is an HTTP 1.1 server 
-type Server struct {
-	listener 	net.Listener
-	closed		atomic.Bool 
+
+type Handler func(w io.Writer, req *request.Request) *HandlerError
+
+type HandlerError struct {
+	StatusCode 	response.StatusCode
+	Message		string 
 }
 
-func Serve(port int) (*Server, error) {
+func (he HandlerError) Write(w io.Writer) {
+	response.WriteStatusLine(w, he.StatusCode)
+	messageBytes := []byte(he.Message)
+	headers := response.GetDefaultHeaders(len(messageBytes))
+	response.WriteHeaders(w, headers)
+	w.Write(messageBytes)
+}
+
+// Server is an HTTP 1.1 server 
+type Server struct {
+	handler 	Handler 
+	listener 	net.Listener
+	closed		atomic.Bool 
+	
+}
+
+func Serve(port int, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err 
 	}
-	s := &Server{listener: listener}
+	s := &Server{
+		handler: handler,
+		listener: listener, 
+	}
 	go s.listen()
 	return s, nil 
 }
@@ -50,17 +75,25 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-
-	// Write status line
-	response.WriteStatusLine(conn, response.StatusCodeSuccess)
-	
-	// Get default headers with correct content length
-	headers := response.GetDefaultHeaders(0)
-
-	// Write headers
-	if err := response.WriteHeaders(conn, headers); err != nil {
-		log.Printf("error writing headers: %v", err)
+	req, err := request.RequestFromReader(conn)
+	if err != nil {
+		hErr := &HandlerError{
+			StatusCode: response.StatusCodeBadRequest,
+			Message:    err.Error(),
+		}
+		hErr.Write(conn)
 		return
 	}
-
+	buf := bytes.NewBuffer([]byte{})
+	hErr := s.handler(buf, req)
+	if hErr != nil {
+		hErr.Write(conn)
+		return
+	}
+	b := buf.Bytes()
+	response.WriteStatusLine(conn, response.StatusCodeSuccess)
+	headers := response.GetDefaultHeaders(len(b))
+	response.WriteHeaders(conn, headers)
+	conn.Write(b)
+	return
 }

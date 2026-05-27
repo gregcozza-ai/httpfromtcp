@@ -2,16 +2,14 @@ package response
 
 import (
 	"fmt"
-	"io"
-	
 )
 
 type StatusCode int 
 
 const (
-	StatusCodeSuccess 			StatusCode = 200
+	StatusCodeSuccess 				StatusCode = 200
 	StatusCodeBadRequest			StatusCode = 400
-	StatusInternalServerError	StatusCode = 500
+	StatusCodeInternalServerError	StatusCode = 500
 )
 
 func getStatusLine(statusCode StatusCode) []byte {
@@ -21,14 +19,9 @@ func getStatusLine(statusCode StatusCode) []byte {
 		reasonPhrase = "OK"
 	case StatusCodeBadRequest:
 		reasonPhrase = "Bad Request"
-	case StatusInternalServerError:
+	case StatusCodeInternalServerError:
 		reasonPhrase = "Internal Server Error"
 	}
 	return []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase))
-}
-
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error{
-	_, err := w.Write(getStatusLine(statusCode))
-	return err 
 }
 

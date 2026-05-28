@@ -3,8 +3,12 @@ package main
 import (
 	"log"
 	"os"
+	"io"
 	"os/signal"
 	"syscall"
+	"net/http"
+	"strings"
+	"fmt"
 
 	"github.com/gregcozza-ai/httpfromtcp/internal/request"
 	"github.com/gregcozza-ai/httpfromtcp/internal/response"
@@ -28,6 +32,10 @@ func main() {
 }
 
 func handler(w *response.Writer, req *request.Request) {
+	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+		handlerProxy(w, req)
+		return 
+	}
 	if req.RequestLine.RequestTarget == "/yourproblem" {
 		handler400(w, req)
 		return
@@ -94,4 +102,54 @@ func handler200(w *response.Writer, _ *request.Request) {
 	w.WriteHeaders(h)
 	w.WriteBody(body)
 	
+}
+
+func handlerProxy(w *response.Writer, req *request.Request) {
+	path := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin/")
+	if path == req.RequestLine.RequestTarget {
+		w.WriteStatusLine(response.StatusCode(404))
+		return 
+	}
+	url := "https://httpbin.org/" + path 
+	fmt.Println("Proxying to", url)
+	resp, err := http.Get(url)
+	if err != nil {
+		handler500(w, req)
+		return 
+	}
+	defer resp.Body.Close()
+
+	//resp.Header.Del("Content-Length")
+	//resp.Header.Set("Transfer-Encoding", "chunked")
+
+	w.WriteStatusLine(response.StatusCodeSuccess)
+	headers := response.GetDefaultHeaders(0)
+	headers.Override("Transfer-Encoding", "chunked")
+	headers.Remove("Content-Length")
+	w.WriteHeaders(headers)
+
+	const maxChunkSize = 1024
+	buf := make([]byte, maxChunkSize)
+	for {
+		n, err := resp.Body.Read(buf)
+		fmt.Println("Read", n, "bytes")
+		if n > 0 {
+			_, err = w.WriteChunkedBody(buf[:n])
+			if err != nil {
+				fmt.Println("Error writing chunked body:", err)
+				break
+			}
+		}
+		if err == io.EOF{
+			break
+		}
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			break
+		}
+	}
+	_, err = w.WriteChunkedBodyDone()
+	if err != nil {
+		fmt.Println("Error writing chunked body done:", err)
+	}
 }
